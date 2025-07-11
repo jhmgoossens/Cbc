@@ -76,6 +76,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		..\..\.github\workflows\linux-ci.yml = ..\..\.github\workflows\linux-ci.yml
 		..\..\.github\workflows\release.yml = ..\..\.github\workflows\release.yml
 		..\..\.github\workflows\windows-ci.yml = ..\..\.github\workflows\windows-ci.yml
+		..\..\.github\workflows\windows-msvs-ci.yml = ..\..\.github\workflows\windows-msvs-ci.yml
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "osiUnitTest", "osiUnitTest\osiUnitTest.vcxproj", "{BB058D80-D376-4F0F-87F7-E4760BC2C84D}"
@@ -245,6 +246,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{EAF01AC1-8D19-4E37-9852-736DCFF67865} = {00000000-0000-0000-0000-000000000000}
 		{02DAC099-45E6-4442-BA79-684D98557861} = {FAA08B0C-E9D4-4A64-AB36-B18DB3112D87}
 		{BB058D80-D376-4F0F-87F7-E4760BC2C84D} = {8611E933-9020-4D93-A72B-984AAB27425C}
 		{8611E933-9020-4D93-A72B-984AAB27425C} = {FAA08B0C-E9D4-4A64-AB36-B18DB3112D87}
