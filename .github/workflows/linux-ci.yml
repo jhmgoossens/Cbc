@@ -20,7 +20,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
         build_static: [true, false]
-        flags: ADD_CXXFLAGS=-fvisibility=hidden,-fhardened
+        flags: ["ADD_CXXFLAGS=-fvisibility=hidden,-fhardened"]
         download_requirements: [sudo apt install -y -qq gfortran liblapack-dev libmetis-dev libnauty-dev]
         include:
           - os: macos-13

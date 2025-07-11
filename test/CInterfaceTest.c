@@ -16,6 +16,18 @@
 #define INFINITY (HUGE_VAL * 2)
 #endif
 
+/** A function to block the popup windows that windows creates when the code
+    crashes */
+#if defined(_MSC_VER)
+#include <crtdbg.h>
+void WindowsErrorPopupBlocker()
+{
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE | _CRTDBG_MODE_DEBUG);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+}
+#else
+void WindowsErrorPopupBlocker() {}
+#endif
 
 static int callback_called = 0;
 
@@ -1175,6 +1187,9 @@ void testDualReductionsType( enum LPReductions red ){
 
 int main() {
     printf("\nStarting C Interface test.\n\n");
+  
+    WindowsErrorPopupBlocker();
+
     char buildInfo[1024];
     Cbc_getBuildInfo(buildInfo);
     printf("%s\n", buildInfo);
