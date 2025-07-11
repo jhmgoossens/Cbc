@@ -154,6 +154,8 @@ void CbcStrategyDefault::setupCutGenerators(CbcModel &model)
   int nNodes = model.getMaximumNodes();
   if (nNodes >= 190000 && nNodes < 190064)
     genFlags = nNodes - 190000;
+#else
+  genFlags=0;
 #endif
 
   CglProbing generator1;
@@ -524,7 +526,7 @@ void CbcStrategyDefault::setupOther(CbcModel &model)
       // now tighten bounds
       if (clpSolver) {
         // model has changed
-        solver = model.solver();
+        solver = solver2; //model.solver();
         OsiClpSolverInterface *clpSolver = dynamic_cast< OsiClpSolverInterface * >(solver);
         ClpSimplex *lpSolver = clpSolver->getModelPtr();
         lpSolver->passInMessageHandler(solver->messageHandler());

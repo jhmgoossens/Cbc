@@ -1419,8 +1419,7 @@ void CbcModel::saveModel(OsiSolverInterface *saveSolver,
 	if (numberFixed * 20 < numberColumns)
 	  tryNewSearch = false;
       } else {
-	//if (numberFixed * 20 < numberColumns)
-	if (!numberFixed)
+	if (numberFixed * 20 < numberColumns) //	if (!numberFixed)
 	  tryNewSearch = false;
       }
 #endif
@@ -2691,6 +2690,10 @@ void CbcModel::branchAndBound(int doStatistics)
       // switch off fast nodes for now
       fastNodeDepth_ = -1;
       moreSpecialOptions_ &= ~33554432; // no diving
+    }
+    if (!numberStrong_&&fastNodeDepth_>0) {
+      // does not work if no strong
+      fastNodeDepth_ = -1;
     }
     if (numberThreads_ > 0 && ((threadMode_&1) == 0 || fastNodeDepth_<=0)) {
       /* switch off fast nodes for now (unless user really wants)
@@ -4979,7 +4982,7 @@ void CbcModel::branchAndBound(int doStatistics)
     masterThread_ = master_->masterThread();
   }
 #endif
-  {
+  if (feasible) {
     OsiClpSolverInterface *clpSolver =
         dynamic_cast<OsiClpSolverInterface *>(solver_);
     if (clpSolver && !parentModel_) {
@@ -5515,6 +5518,19 @@ void CbcModel::branchAndBound(int doStatistics)
         lastEvery1000 = numberNodes_ + 1000;
       }
       bool redoTree = nodeCompare_->every1000Nodes(this, numberNodes_);
+      // check for ctrl-c
+      if (parentModel_ && (specialOptions_&2048)==0) {
+	// in restarted search
+	CbcModel * model = parentModel_;
+	while (model) {
+	  if (model->eventHappened()) {
+	    sayEventHappened();
+	    setProblemStatus(5);
+	    break;
+	  }
+	  model = model->parentModel();
+	}
+      }
 #ifdef CHECK_CUT_SIZE
       verifyCutSize(tree_, *this);
 #endif
@@ -7563,7 +7579,8 @@ CbcModel::~CbcModel() {
     delete solver_;
     solver_ = NULL;
   }
-  if (((fastNodeDepth_ >= 1000000 && fastNodeDepth_ < 1001000)
+  if (((fastNodeDepth_ >= 1000000 && fastNodeDepth_ < 1001000
+	&& numberObjects_)
        || (moreSpecialOptions_ & 33554432) != 0) &&
       (specialOptions_&2048) == 0) {
     // delete object off end
@@ -9661,6 +9678,13 @@ bool CbcModel::solveWithCuts(OsiCuts &cuts, int numberTries, CbcNode *node)
 #ifdef JJF_ZERO
     // switch on to get all cuts printed
     theseCuts.printCuts();
+    if (debugger) {
+      int numberRowCuts = theseCuts.sizeRowCuts();
+      for (int k = 0; k < numberRowCuts; k++) {
+	OsiRowCut thisCut = theseCuts.rowCut(k);
+	assert (!debugger->invalidCut(thisCut));
+      }
+    }
 #endif
     int numberColumnCuts = theseCuts.sizeColCuts();
     int numberRowCuts = theseCuts.sizeRowCuts();
@@ -11616,7 +11640,7 @@ int CbcModel::resolve(CbcNodeInfo *parent, int whereFrom, double *saveSolution,
 	  sum += element[j]*solution[iColumn];
 	}
 	if (sum<rowLower[i]-1.0e-6 || sum>rowUpper[i]+1.0e-6)
-	  printf("bad row %d %g <= %g <= %g\n",
+	  printf("bad row %d %.10g <= %.10g <= %.10g\n",
 		 i,rowLower[i],sum,rowUpper[i]);
       }
       for (int i = 0; i < numberColumns; i++) {
@@ -14101,7 +14125,6 @@ double CbcModel::checkSolution(double cutoff, double *solution,
         // bool saveTakeHint;
         // OsiHintStrength saveStrength;
         // bool savePrintHint;
-        // solver_->writeMpsNative("infeas.mps", NULL, NULL, 2);
         // bool gotHint =
         // (solver_->getHintParam(OsiDoReducePrint,savePrintHint,saveStrength));
         // gotHint =
@@ -14148,6 +14171,36 @@ double CbcModel::checkSolution(double cutoff, double *solution,
           }
 #endif
         }
+	if (solver_->isProvenOptimal()) {
+	  // double double check
+	  int numberColumns = solver_->getNumCols();
+	  const double *solution = solver_->getColSolution();
+	  const double *columnLower = solver_->getColLower();
+	  const double *columnUpper = solver_->getColUpper();
+	  double sumInf = 0.0;
+	  double tolerance;
+	  solver_->getDblParam(OsiPrimalTolerance, tolerance);
+	  for (int i=0;i<numberColumns;i++) {
+	    double value = solution[i];
+	    if (value>columnUpper[i]+tolerance)
+	      sumInf += value-(columnUpper[i]+tolerance);
+	    else if (value<columnLower[i]-tolerance)
+	      sumInf += (columnLower[i]-tolerance)-value;
+	  }
+	  static int badTimes = 0;
+	  char temp[120];
+	  if (!sumInf) { 
+	    sprintf(temp,"Possible tolerance issue - had to re-solve on final check");
+	  } else { 
+	    sprintf(temp,"Possible tolerance issue - sum of infeasibilities on final check - %g",
+		    sumInf);
+	    cutoff = -0.5*COIN_DBL_MAX;
+	  }
+	  if (!badTimes) 
+	    messageHandler()->message(CBC_GENERAL, messages())
+	      << temp << CoinMessageEol;
+	  badTimes++;
+	}
       }
       // assert(solver_->isProvenOptimal());
       solver_->setHintParam(OsiDoDualInInitial, saveTakeHint, saveStrength);
@@ -14804,7 +14857,8 @@ nPartiallyFixed %d , nPartiallyFixedBut %d , nUntouched %d\n",
         moreSpecialOptions2_ &= ~2;
       }
       // This is not correct - that way cutoff can go up if maximization
-      double direction = !modelFlipped() ? solver_->getObjSense() : 1.0;
+      double direction = !modelFlipped() ? solver_->getObjSense() : 1.0; 
+      cutoff += 0.001; // relax
       setCutoff(cutoff*direction);
       // change cutoff as constraint if wanted
       if (cutoffRowNumber_ >= 0) {

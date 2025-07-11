@@ -868,13 +868,15 @@ int CbcNode::chooseBranch(CbcModel *model, CbcNode *lastNode, int numberPassesLe
         CoinWarmStartBasis *ws = dynamic_cast< CoinWarmStartBasis * >(solver->getWarmStart());
         if (!ws)
           break;
+        double tolerance;
+        solver->getDblParam(OsiPrimalTolerance, tolerance);
         for (i = 0; i < numberColumns; i++) {
           double value = saveSolution[i];
-          if (value < lower[i]) {
+          if (value < lower[i] - tolerance) {
             saveSolution[i] = lower[i];
             roundAgain = true;
             ws->setStructStatus(i, CoinWarmStartBasis::atLowerBound);
-          } else if (value > upper[i]) {
+          } else if (value > upper[i] + tolerance) {
             saveSolution[i] = upper[i];
             roundAgain = true;
             ws->setStructStatus(i, CoinWarmStartBasis::atUpperBound);
@@ -1675,7 +1677,12 @@ int CbcNode::chooseDynamicBranch(CbcModel *model, CbcNode *lastNode,
     for (int i = model->numberIntegers(); i < numberObjects; i++) {
       OsiObject *object = model->modifiableObject(i);
       CbcObject *obj = dynamic_cast< CbcObject * >(object);
-      if (!obj || !obj->optionalObject()) {
+      CbcSimpleIntegerDynamicPseudoCost * ps =
+	dynamic_cast<CbcSimpleIntegerDynamicPseudoCost *>(obj);
+      // also allow SOS
+      CbcSOS * sos =
+	dynamic_cast<CbcSOS *>(obj);
+      if (!obj || (!obj->optionalObject()&&!ps&&!sos)) {
         double infeasibility = object->checkInfeasibility(&usefulInfo);
         if (infeasibility) {
           useOldWay = true;
@@ -1729,12 +1736,14 @@ int CbcNode::chooseDynamicBranch(CbcModel *model, CbcNode *lastNode,
   int i;
   int saveStateOfSearch = model->stateOfSearch() % 10;
   int numberStrong = model->numberStrong();
+  //if (!depth_&&(model->specialOptions()&2048)==0)
+  //numberStrong = numberObjects;
   /* Ranging is switched off.
        The idea is that you can find out the effect of one iteration
        on each unsatisfied variable cheaply.  Then use this
        if you have not got much else to go on.
     */
-#define CBC_RANGING
+  //#define CBC_RANGING
 #ifdef CBC_RANGING
   // must have clp
   // Pass number
@@ -3647,7 +3656,7 @@ int CbcNode::chooseDynamicBranch(CbcModel *model, CbcNode *lastNode,
                 double changePer = objectiveChange / (down + 1.0e-7);
                 double distance = (cutoff - objectiveValue_) / changePer;
                 distance += 1.0e-3;
-                if (distance < 5.0) {
+                if (distance < 5.0 && down > 1.0e-3) {
 #if TRY_NODE_DOUBLE>0
 		  if (doubleTry==2&&distance<2.0) {
 		    // look carefully
@@ -3943,7 +3952,7 @@ int CbcNode::chooseDynamicBranch(CbcModel *model, CbcNode *lastNode,
                 double changePer = objectiveChange / (up + 1.0e-7);
                 double distance = (cutoff - objectiveValue_) / changePer;
                 distance += 1.0e-3;
-                if (distance < 5.0) {
+                if (distance < 5.0 && up > 1.0e-3) {
 #if TRY_NODE_DOUBLE>0
 		  if (doubleTry==2&&distance<2.0) {
 		    // look carefully
@@ -6735,6 +6744,14 @@ int CbcNode::chooseClpBranch(CbcModel *model,
     int saveLogLevel = simplex->logLevel();
     simplex->setLogLevel(0);
     simplex->dual();
+    if (simplex->status()) {
+#ifdef CBC_MORE_PRINTING
+      model->messageHandler()->message(CBC_FPUMP1, *model->messagesPointer())
+	<< "fathomMany solution -trying again from allslack" << CoinMessageEol;
+#endif
+      simplex->allSlackBasis(true);
+      simplex->dual();
+    }
     simplex->setLogLevel(saveLogLevel);
     double cutoff = model->getCutoff();
     bool goodSolution = true;
